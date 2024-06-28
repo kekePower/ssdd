@@ -10,11 +10,18 @@ I just bought a new laptop and on my workstation I was using ssd from Sawfish wh
 
 ## Dependencies and compilation
 
-This app requires GTK+ 3.0 development libraries and gcc.
+This app requires GTK+ 3.0 development libraries and gcc or clang.
 
 I am using this command to compile the program:
+
+Using GCC:
 ```shell
 % gcc ssdd.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
+```
+
+Using Clang:
+```shell
+% clang ssdd.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
 ```
 
 This produces the binary `ssdd` which you can place in your $PATH.
