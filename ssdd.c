@@ -42,12 +42,14 @@ static void show_about_dialog(GtkWidget *widget) {
     GtkWidget *dialog;
     GtkWidget *content_area;
     GtkWidget *label;
+    GtkWidget *image;
+    GtkWidget *box;
     const gchar *about_text = 
-        "\nAbout Stig's ShutDown Dialog\n\n"
+        "About Stig's ShutDown Dialog\n\n"
         "<b>Version:</b> 1.0\n"
         "<b>Author:</b> kekePower\n"
         "<b>URL:</b> <a href=\"https://git.kekepower.com/kekePower/ssdd\">https://git.kekepower.com/kekePower/ssdd</a>\n"
-        "<b>Description:</b> This is a simple Shutdown Dialog for Openbox.\n";
+        "<b>Description:</b> This is a simple Shutdown Dialog for Openbox.";
 
     dialog = gtk_dialog_new_with_buttons("About Stig's ShutDown Dialog",
                                          NULL,
@@ -56,12 +58,19 @@ static void show_about_dialog(GtkWidget *widget) {
                                          GTK_RESPONSE_CLOSE,
                                          NULL);
     content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(content_area), box);
+
+    image = gtk_image_new_from_file("ssdd-icon.png");
+    gtk_box_pack_start(GTK_BOX(box), image, FALSE, FALSE, 0);
+
     label = gtk_label_new(NULL);
     gtk_label_set_markup(GTK_LABEL(label), about_text);
     gtk_label_set_selectable(GTK_LABEL(label), TRUE);
     gtk_widget_set_halign(label, GTK_ALIGN_START);
     gtk_widget_set_valign(label, GTK_ALIGN_START);
-    gtk_container_add(GTK_CONTAINER(content_area), label);
+    gtk_box_pack_start(GTK_BOX(box), label, TRUE, TRUE, 0);
+
     gtk_widget_show_all(dialog);
 
     gtk_dialog_run(GTK_DIALOG(dialog));
@@ -125,8 +134,10 @@ static void activate(GtkApplication *app, gpointer user_data) {
     };
 
     window = gtk_application_window_new(app);
-    gtk_window_set_title(GTK_WINDOW(window), "Stig's ShutDown Dialog");
+    gtk_window_set_title(GTK_WINDOW(window), "Exit Openbox");
     gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
+
+    gtk_window_set_icon_from_file(GTK_WINDOW(window), "ssdd-icon.png", NULL);
 
     grid = gtk_grid_new();
     gtk_container_add(GTK_CONTAINER(window), grid);
