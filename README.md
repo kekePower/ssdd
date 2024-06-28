@@ -22,7 +22,7 @@ This produces the binary `ssdd` which you can place in your $PATH.
 `% sudo nvim /etc/xdg/openbox/menu.xml`
 
 Find the line with the standard Openbox Exit option and change it to
-`    <item label="Log Out"><action name="Execute"><execute>/home/stig/bin/ssdd</execute></item>`
+`<item label="Log Out"><action name="Execute"><execute>/home/stig/bin/ssdd</execute></item>`
 
 The reconfigure Openbox to use the new setting.
 `% openbox --reconfigure`
