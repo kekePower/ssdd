@@ -1,6 +1,8 @@
 # ssdd
 
-A simple Shutdown Dialog for Openbox written in C using GTK
+A simple Shutdown Dialog for Openbox written in C using GTK 
+
+![Project Screenshot](ssdd.png)
 
 ## Why?
 
