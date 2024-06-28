@@ -16,22 +16,24 @@ static void execute_command(const gchar *command) {
     }
 }
 
-static void show_confirmation_dialog(GtkWidget *widget, gpointer data) {
-    const gchar *command = (const gchar *) data;
+static void show_confirmation_dialog(GtkWidget *widget, const gchar *label, const gchar *command) {
     GtkWidget *dialog;
     gint response;
+
+    gchar *message = g_strdup_printf("Are you sure you want to %s?", label);
 
     dialog = gtk_message_dialog_new(NULL,
                                     GTK_DIALOG_DESTROY_WITH_PARENT,
                                     GTK_MESSAGE_QUESTION,
                                     GTK_BUTTONS_NONE,
-                                    "Are you sure you want to execute: %s?",
-                                    command);
+                                    "%s",
+                                    message);
     gtk_dialog_add_button(GTK_DIALOG(dialog), "Yes", GTK_RESPONSE_YES);
     gtk_dialog_add_button(GTK_DIALOG(dialog), "No", GTK_RESPONSE_NO);
 
     response = gtk_dialog_run(GTK_DIALOG(dialog));
     gtk_widget_destroy(dialog);
+    g_free(message);
 
     if (response == GTK_RESPONSE_YES) {
         execute_command(command);
@@ -80,18 +82,17 @@ static void show_about_dialog(GtkWidget *widget) {
 
 static void button_clicked(GtkWidget *widget, gpointer data) {
     const gchar *command = (const gchar *) data;
+    const gchar *label = gtk_button_get_label(GTK_BUTTON(widget));
+
     if (g_strcmp0(command, "exit") == 0) {
         g_application_quit(G_APPLICATION(g_object_get_data(G_OBJECT(widget), "app")));
         return;
     }
 
-    if (g_strcmp0(command, "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Reboot boolean:true") == 0 ||
-        g_strcmp0(command, "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.PowerOff boolean:true") == 0) {
-        show_confirmation_dialog(widget, (gpointer) command);
-    } else if (g_strcmp0(command, "about") == 0) {
+    if (g_strcmp0(command, "about") == 0) {
         show_about_dialog(widget);
     } else {
-        execute_command(command);
+        show_confirmation_dialog(widget, label, command);
     }
 }
 
@@ -103,10 +104,10 @@ static void activate(GtkApplication *app, gpointer user_data) {
     GtkWidget *box;
     GtkWidget *label;
     const gchar *buttons[] = {
-        "",
+        "openbox --exit",
         "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Reboot boolean:true",
         "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.PowerOff boolean:true",
-        "",
+        "dm-tool switch-to-greeter",
         "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Suspend boolean:true",
         "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Hibernate boolean:true",
         "about",
@@ -152,6 +153,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
 
         label = gtk_label_new(labels[i]);
         gtk_box_pack_start(GTK_BOX(box), label, TRUE, TRUE, 0);
+
+        gtk_button_set_label(GTK_BUTTON(button), labels[i]);
 
         g_object_set_data(G_OBJECT(button), "app", app);
         g_signal_connect(button, "clicked", G_CALLBACK(button_clicked), (gpointer) buttons[i]);
