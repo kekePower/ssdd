@@ -62,6 +62,7 @@ static void show_about_dialog(GtkWidget *widget) {
     gtk_container_add(GTK_CONTAINER(content_area), box);
 
     image = gtk_image_new_from_file("ssdd-icon.png");
+    gtk_image_set_pixel_size(GTK_IMAGE(image), 250);  // Assuming original size is 500x500
     gtk_box_pack_start(GTK_BOX(box), image, FALSE, FALSE, 0);
 
     label = gtk_label_new(NULL);
@@ -84,9 +85,8 @@ static void button_clicked(GtkWidget *widget, gpointer data) {
         return;
     }
 
-    if (g_strcmp0(command, "openbox --exit") == 0 ||
-        g_strcmp0(command, "systemctl reboot") == 0 ||
-        g_strcmp0(command, "systemctl poweroff") == 0) {
+    if (g_strcmp0(command, "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Reboot boolean:true") == 0 ||
+        g_strcmp0(command, "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.PowerOff boolean:true") == 0) {
         show_confirmation_dialog(widget, (gpointer) command);
     } else if (g_strcmp0(command, "about") == 0) {
         show_about_dialog(widget);
@@ -103,12 +103,12 @@ static void activate(GtkApplication *app, gpointer user_data) {
     GtkWidget *box;
     GtkWidget *label;
     const gchar *buttons[] = {
-        "openbox --exit",
-        "systemctl reboot",
-        "systemctl poweroff",
-        "dm-tool switch-to-greeter",
-        "systemctl suspend",
-        "systemctl hibernate",
+        "",
+        "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Reboot boolean:true",
+        "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.PowerOff boolean:true",
+        "",
+        "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Suspend boolean:true",
+        "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Hibernate boolean:true",
         "about",
         "exit"
     };
