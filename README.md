@@ -6,7 +6,7 @@ A simple Shutdown Dialog for Openbox written in C using GTK
 
 ## Why?
 
-I just bought a new laptop and on my workstation I was using ssd from Sawfish which I loved. I didn't want to go through all the steps of installing the necessary libraries and dependencies to get it to work, so I decided to create my own.
+I just bought a new laptop and on my workstation I was using [ssd from Sawfish](https://github.com/SawfishWM/ssd) which I loved. I didn't want to go through all the steps of installing the necessary libraries and dependencies to get it to work, so I decided to create my own.
 
 ## Dependencies and compilation
 
