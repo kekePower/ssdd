@@ -16,12 +16,12 @@ I am using this command to compile the program:
 
 Using GCC:
 ```shell
-% gcc ssdd.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
+% gcc ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
 ```
 
 Using Clang:
 ```shell
-% clang ssdd.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
+% clang gcc ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
 ```
 
 This produces the binary `ssdd` which you can place in your $PATH.
