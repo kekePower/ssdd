@@ -1,5 +1,6 @@
 #include <gtk/gtk.h>
 #include <stdlib.h>
+#include "resources.h"  // Include the generated resource header
 
 static void execute_command(const gchar *command) {
     int ret = system(command);
@@ -16,24 +17,22 @@ static void execute_command(const gchar *command) {
     }
 }
 
-static void show_confirmation_dialog(GtkWidget *widget, const gchar *label, const gchar *command) {
+static void show_confirmation_dialog(GtkWidget *widget, gpointer data) {
+    const gchar *command = (const gchar *) data;
     GtkWidget *dialog;
     gint response;
-
-    gchar *message = g_strdup_printf("Are you sure you want to %s?", label);
 
     dialog = gtk_message_dialog_new(NULL,
                                     GTK_DIALOG_DESTROY_WITH_PARENT,
                                     GTK_MESSAGE_QUESTION,
                                     GTK_BUTTONS_NONE,
-                                    "%s",
-                                    message);
+                                    "Are you sure you want to execute: %s?",
+                                    command);
     gtk_dialog_add_button(GTK_DIALOG(dialog), "Yes", GTK_RESPONSE_YES);
     gtk_dialog_add_button(GTK_DIALOG(dialog), "No", GTK_RESPONSE_NO);
 
     response = gtk_dialog_run(GTK_DIALOG(dialog));
     gtk_widget_destroy(dialog);
-    g_free(message);
 
     if (response == GTK_RESPONSE_YES) {
         execute_command(command);
@@ -47,11 +46,11 @@ static void show_about_dialog(GtkWidget *widget) {
     GtkWidget *image;
     GtkWidget *box;
     const gchar *about_text = 
-        "About Stig's ShutDown Dialog\n\n"
+        "\nAbout Stig's ShutDown Dialog\n\n"
         "<b>Version:</b> 1.0\n"
         "<b>Author:</b> kekePower\n"
         "<b>URL:</b> <a href=\"https://git.kekepower.com/kekePower/ssdd\">https://git.kekepower.com/kekePower/ssdd</a>\n"
-        "<b>Description:</b> This is a simple Shutdown Dialog for Openbox.";
+        "<b>Description:</b> This is a simple Shutdown Dialog for Openbox.\n";
 
     dialog = gtk_dialog_new_with_buttons("About Stig's ShutDown Dialog",
                                          NULL,
@@ -63,7 +62,7 @@ static void show_about_dialog(GtkWidget *widget) {
     box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
     gtk_container_add(GTK_CONTAINER(content_area), box);
 
-    image = gtk_image_new_from_file("ssdd-icon.png");
+    image = gtk_image_new_from_resource("/org/gtk/example/ssdd-icon.png");
     gtk_image_set_pixel_size(GTK_IMAGE(image), 250);  // Assuming original size is 500x500
     gtk_box_pack_start(GTK_BOX(box), image, FALSE, FALSE, 0);
 
@@ -82,18 +81,28 @@ static void show_about_dialog(GtkWidget *widget) {
 
 static void button_clicked(GtkWidget *widget, gpointer data) {
     const gchar *command = (const gchar *) data;
-    const gchar *label = gtk_button_get_label(GTK_BUTTON(widget));
-
     if (g_strcmp0(command, "exit") == 0) {
         g_application_quit(G_APPLICATION(g_object_get_data(G_OBJECT(widget), "app")));
         return;
     }
 
-    if (g_strcmp0(command, "about") == 0) {
+    if (g_strcmp0(command, "openbox --exit") == 0 ||
+        g_strcmp0(command, "systemctl reboot") == 0 ||
+        g_strcmp0(command, "systemctl poweroff") == 0) {
+        show_confirmation_dialog(widget, (gpointer) command);
+    } else if (g_strcmp0(command, "about") == 0) {
         show_about_dialog(widget);
     } else {
-        show_confirmation_dialog(widget, label, command);
+        execute_command(command);
     }
+}
+
+static gboolean on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data) {
+    if (event->keyval == GDK_KEY_Escape) {
+        g_application_quit(G_APPLICATION(data));
+        return TRUE;  // Event handled
+    }
+    return FALSE;  // Event not handled
 }
 
 static void activate(GtkApplication *app, gpointer user_data) {
@@ -105,11 +114,11 @@ static void activate(GtkApplication *app, gpointer user_data) {
     GtkWidget *label;
     const gchar *buttons[] = {
         "openbox --exit",
-        "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Reboot boolean:true",
-        "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.PowerOff boolean:true",
+        "systemctl reboot",
+        "systemctl poweroff",
         "dm-tool switch-to-greeter",
-        "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Suspend boolean:true",
-        "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.Hibernate boolean:true",
+        "systemctl suspend",
+        "systemctl hibernate",
         "about",
         "exit"
     };
@@ -138,7 +147,11 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_window_set_title(GTK_WINDOW(window), "Exit Openbox");
     gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
 
-    gtk_window_set_icon_from_file(GTK_WINDOW(window), "ssdd-icon.png", NULL);
+    // Load the icon from the resource and set it as the window icon
+    GdkPixbuf *icon_pixbuf = gdk_pixbuf_new_from_resource("/org/gtk/example/ssdd-icon.png", NULL);
+    gtk_window_set_icon(GTK_WINDOW(window), icon_pixbuf);
+
+    g_signal_connect(window, "key-press-event", G_CALLBACK(on_key_press), app);
 
     grid = gtk_grid_new();
     gtk_container_add(GTK_CONTAINER(window), grid);
@@ -154,8 +167,6 @@ static void activate(GtkApplication *app, gpointer user_data) {
         label = gtk_label_new(labels[i]);
         gtk_box_pack_start(GTK_BOX(box), label, TRUE, TRUE, 0);
 
-        gtk_button_set_label(GTK_BUTTON(button), labels[i]);
-
         g_object_set_data(G_OBJECT(button), "app", app);
         g_signal_connect(button, "clicked", G_CALLBACK(button_clicked), (gpointer) buttons[i]);
         gtk_grid_attach(GTK_GRID(grid), button, i % 4, i / 4, 1, 1);
@@ -167,6 +178,9 @@ static void activate(GtkApplication *app, gpointer user_data) {
 int main(int argc, char **argv) {
     GtkApplication *app;
     int status;
+
+    // Register the resource
+    g_resources_register(resources_get_resource());
 
     app = gtk_application_new("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
     g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
