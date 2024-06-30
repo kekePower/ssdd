@@ -47,7 +47,7 @@ static void show_about_dialog(GtkWidget *widget) {
     GtkWidget *box;
     const gchar *about_text = 
         "\nAbout Stig's ShutDown Dialog\n\n"
-        "<b>Version:</b> 1.0\n"
+        "<b>Version:</b> 1.1\n"
         "<b>Author:</b> kekePower\n"
         "<b>URL:</b> <a href=\"https://git.kekepower.com/kekePower/ssdd\">https://git.kekepower.com/kekePower/ssdd</a>\n"
         "<b>Description:</b> This is a simple Shutdown Dialog for Openbox.\n";
