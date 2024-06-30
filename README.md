@@ -6,11 +6,14 @@ A simple Shutdown Dialog for Openbox written in C using GTK
 
 ## Why?
 
-I just bought a new laptop and on my workstation I was using [ssd from Sawfish](https://github.com/SawfishWM/ssd) which I loved. I didn't want to go through all the steps of installing the necessary libraries and dependencies to get it to work, so I decided to create my own.
+Been using Openbox many many years and loving it. One of the main issue I have with it is its incredibly simple Exit dialog. On a modern system, a better solution is needed.
+I guess there are many programs such as this one out there, but one more doesn't hurt, does it?
+
+Anyway, I just bought a new laptop and on my workstation I was using [ssd from Sawfish](https://github.com/SawfishWM/ssd) which I loved. I didn't want to go through all the steps of installing the necessary libraries and dependencies to get it to work, so I decided to create my own.
 
 ## Dependencies and compilation
 
-This app requires GTK+ 3.0 development libraries and gcc or clang.
+This app requires GTK+ 3.0, Glib 2 development libraries and gcc or clang.
 
 I am using this command to compile the program:
 
@@ -24,7 +27,7 @@ Using Clang:
 % clang ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
 ```
 
-This produces the binary `ssdd` which you can place in your $PATH.
+This produces the binary `ssdd` which you can place in your $PATH. I place mine in `~/bin`. You can strip if, but it'll only save you a few kilobytes, so it's basically unnecessary...
 
 ## Configure Openbox to use it.
 
