@@ -17,22 +17,24 @@ static void execute_command(const gchar *command) {
     }
 }
 
-static void show_confirmation_dialog(GtkWidget *widget, gpointer data) {
-    const gchar *command = (const gchar *) data;
+static void show_confirmation_dialog(GtkWidget *widget, const gchar *label, const gchar *command) {
     GtkWidget *dialog;
     gint response;
+
+    gchar *message = g_strdup_printf("Are you sure you want to %s?", label);
 
     dialog = gtk_message_dialog_new(NULL,
                                     GTK_DIALOG_DESTROY_WITH_PARENT,
                                     GTK_MESSAGE_QUESTION,
                                     GTK_BUTTONS_NONE,
-                                    "Are you sure you want to execute: %s?",
-                                    command);
+                                    "%s",
+                                    message);
     gtk_dialog_add_button(GTK_DIALOG(dialog), "Yes", GTK_RESPONSE_YES);
     gtk_dialog_add_button(GTK_DIALOG(dialog), "No", GTK_RESPONSE_NO);
 
     response = gtk_dialog_run(GTK_DIALOG(dialog));
     gtk_widget_destroy(dialog);
+    g_free(message);
 
     if (response == GTK_RESPONSE_YES) {
         execute_command(command);
@@ -46,7 +48,7 @@ static void show_about_dialog(GtkWidget *widget) {
     GtkWidget *image;
     GtkWidget *box;
     const gchar *about_text = 
-        "\nAbout Stig's ShutDown Dialog\n\n"
+        "\n<b>About Stig's ShutDown Dialog</b>\n\n"
         "<b>Version:</b> 1.1\n"
         "<b>Author:</b> kekePower\n"
         "<b>URL:</b> <a href=\"https://git.kekepower.com/kekePower/ssdd\">https://git.kekepower.com/kekePower/ssdd</a>\n"
@@ -81,19 +83,17 @@ static void show_about_dialog(GtkWidget *widget) {
 
 static void button_clicked(GtkWidget *widget, gpointer data) {
     const gchar *command = (const gchar *) data;
+    const gchar *label = gtk_button_get_label(GTK_BUTTON(widget));
+
     if (g_strcmp0(command, "exit") == 0) {
         g_application_quit(G_APPLICATION(g_object_get_data(G_OBJECT(widget), "app")));
         return;
     }
 
-    if (g_strcmp0(command, "openbox --exit") == 0 ||
-        g_strcmp0(command, "systemctl reboot") == 0 ||
-        g_strcmp0(command, "systemctl poweroff") == 0) {
-        show_confirmation_dialog(widget, (gpointer) command);
-    } else if (g_strcmp0(command, "about") == 0) {
+    if (g_strcmp0(command, "about") == 0) {
         show_about_dialog(widget);
     } else {
-        execute_command(command);
+        show_confirmation_dialog(widget, label, command);
     }
 }
 
@@ -105,13 +105,30 @@ static gboolean on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer dat
     return FALSE;  // Event not handled
 }
 
+static void create_button(GtkWidget *grid, GtkApplication *app, const gchar *label_text, const gchar *icon_name, const gchar *command, int pos) {
+    GtkWidget *button;
+    GtkWidget *box;
+    GtkWidget *image;
+    GtkWidget *label;
+
+    button = gtk_button_new();
+    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(button), box);
+
+    image = gtk_image_new_from_icon_name(icon_name, GTK_ICON_SIZE_BUTTON);
+    gtk_box_pack_start(GTK_BOX(box), image, TRUE, TRUE, 0);
+
+    label = gtk_label_new(label_text);
+    gtk_box_pack_start(GTK_BOX(box), label, TRUE, TRUE, 0);
+
+    g_object_set_data(G_OBJECT(button), "app", app);
+    g_signal_connect(button, "clicked", G_CALLBACK(button_clicked), (gpointer) command);
+    gtk_grid_attach(GTK_GRID(grid), button, pos % 4, pos / 4, 1, 1);
+}
+
 static void activate(GtkApplication *app, gpointer user_data) {
     GtkWidget *window;
     GtkWidget *grid;
-    GtkWidget *button;
-    GtkWidget *image;
-    GtkWidget *box;
-    GtkWidget *label;
     const gchar *buttons[] = {
         "openbox --exit",
         "systemctl reboot",
@@ -150,6 +167,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
     // Load the icon from the resource and set it as the window icon
     GdkPixbuf *icon_pixbuf = gdk_pixbuf_new_from_resource("/org/gtk/example/ssdd-icon.png", NULL);
     gtk_window_set_icon(GTK_WINDOW(window), icon_pixbuf);
+    g_object_unref(icon_pixbuf);  // Free the icon pixbuf after setting it
 
     g_signal_connect(window, "key-press-event", G_CALLBACK(on_key_press), app);
 
@@ -157,19 +175,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_container_add(GTK_CONTAINER(window), grid);
 
     for (int i = 0; i < 8; i++) {
-        button = gtk_button_new();
-        box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
-        gtk_container_add(GTK_CONTAINER(button), box);
-
-        image = gtk_image_new_from_icon_name(icons[i], GTK_ICON_SIZE_BUTTON);
-        gtk_box_pack_start(GTK_BOX(box), image, TRUE, TRUE, 0);
-
-        label = gtk_label_new(labels[i]);
-        gtk_box_pack_start(GTK_BOX(box), label, TRUE, TRUE, 0);
-
-        g_object_set_data(G_OBJECT(button), "app", app);
-        g_signal_connect(button, "clicked", G_CALLBACK(button_clicked), (gpointer) buttons[i]);
-        gtk_grid_attach(GTK_GRID(grid), button, i % 4, i / 4, 1, 1);
+        create_button(grid, app, labels[i], icons[i], buttons[i], i);
     }
 
     gtk_widget_show_all(window);
