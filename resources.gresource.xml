@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-    <gresource prefix="/org/gtk/example">
+    <gresource prefix="/org/gtk/ssdd">
         <file>ssdd-icon.png</file>
     </gresource>
 </gresources>

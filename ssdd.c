@@ -64,7 +64,7 @@ static void show_about_dialog(GtkWidget *widget) {
     box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
     gtk_container_add(GTK_CONTAINER(content_area), box);
 
-    image = gtk_image_new_from_resource("/org/gtk/example/ssdd-icon.png");
+    image = gtk_image_new_from_resource("/org/gtk/ssdd/ssdd-icon.png");
     gtk_image_set_pixel_size(GTK_IMAGE(image), 250);  // Assuming original size is 500x500
     gtk_box_pack_start(GTK_BOX(box), image, FALSE, FALSE, 0);
 
@@ -165,7 +165,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
 
     // Load the icon from the resource and set it as the window icon
-    GdkPixbuf *icon_pixbuf = gdk_pixbuf_new_from_resource("/org/gtk/example/ssdd-icon.png", NULL);
+    GdkPixbuf *icon_pixbuf = gdk_pixbuf_new_from_resource("/org/gtk/ssdd/ssdd-icon.png", NULL);
     gtk_window_set_icon(GTK_WINDOW(window), icon_pixbuf);
     g_object_unref(icon_pixbuf);  // Free the icon pixbuf after setting it
 
@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
     // Register the resource
     g_resources_register(resources_get_resource());
 
-    app = gtk_application_new("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
+    app = gtk_application_new("org.gtk.ssdd", G_APPLICATION_DEFAULT_FLAGS);
     g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
     status = g_application_run(G_APPLICATION(app), argc, argv);
     g_object_unref(app);
