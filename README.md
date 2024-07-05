@@ -27,7 +27,7 @@ Using Clang:
 % clang ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
 ```
 
-This produces the binary `ssdd` which you can place in your $PATH. I place mine in `~/bin`. You can strip if, but it'll only save you a few kilobytes, so it's basically unnecessary...
+This produces the binary `ssdd` which you can place in your $PATH. I place mine in `~/bin`. You can strip it but it'll only save you a few kilobytes, so it's basically unnecessary...
 
 ## Configure Openbox to use it.
 
