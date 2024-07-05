@@ -15,7 +15,18 @@ Anyway, I just bought a new laptop and on my workstation I was using [ssd from S
 
 This app requires GTK+ 3.0, Glib 2 development libraries and gcc or clang.
 
-I am using this command to compile the program:
+To compile this program you can use `make` after you've edited `Makefile` or use the pre-defined options to install ssdd to `/usr/local`. The `Makefile` is pretty self explanatory.
+
+To compile everything:
+`make all`
+
+To clean up:
+`make clean`
+
+To install:
+`sudo make install`
+
+Or if you want, you can compile it directly and copy the binary to a location in your `PATH`.
 
 Using GCC:
 ```shell
