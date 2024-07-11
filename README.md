@@ -1,10 +1,10 @@
-# ssdd: Stig's Shutdown Dialog for Openbox
+# ssdd: Simple Shutdown Dialog for Openbox
 
 A simple Shutdown Dialog for Openbox written in C using GTK 
 
 ![Project Screenshot](ssdd.png)
 
-**Stig's Shutdown Dialog (ssdd)** is a simple yet stylish shutdown dialog for Openbox, crafted in C using GTK.
+**Simple Shutdown Dialog (ssdd)** is a simple yet stylish shutdown dialog for Openbox, crafted in C using GTK.
 
 ## Why ssdd?
 

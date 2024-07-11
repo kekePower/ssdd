@@ -48,13 +48,13 @@ static void show_about_dialog(GtkWidget *widget) {
     GtkWidget *image;
     GtkWidget *box;
     const gchar *about_text = 
-        "\n<b>About Stig's ShutDown Dialog</b>\n\n"
+        "\n<b>About Simple ShutDown Dialog</b>\n\n"
         "<b>Version:</b> 1.2\n"
         "<b>Author:</b> kekePower\n"
         "<b>URL:</b> <a href=\"https://git.kekepower.com/kekePower/ssdd\">https://git.kekepower.com/kekePower/ssdd</a>\n"
         "<b>Description:</b> This is a simple Shutdown Dialog for Openbox.\n";
 
-    dialog = gtk_dialog_new_with_buttons("About Stig's ShutDown Dialog",
+    dialog = gtk_dialog_new_with_buttons("About Simple ShutDown Dialog",
                                          NULL,
                                          GTK_DIALOG_DESTROY_WITH_PARENT,
                                          "_Close",
