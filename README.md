@@ -1,53 +1,72 @@
-# ssdd
+# ssdd: Stig's Shutdown Dialog for Openbox
 
 A simple Shutdown Dialog for Openbox written in C using GTK 
 
 ![Project Screenshot](ssdd.png)
 
-## Why?
+**Stig's Shutdown Dialog (ssdd)** is a simple yet stylish shutdown dialog for Openbox, crafted in C using GTK.
 
-Been using Openbox many many years and loving it. One of the main issue I have with it is its incredibly simple Exit dialog. On a modern system, a better solution is needed.
-I guess there are many programs such as this one out there, but one more doesn't hurt, does it?
+## Why ssdd?
 
-Anyway, I just bought a new laptop and on my workstation I was using [ssd from Sawfish](https://github.com/SawfishWM/ssd) which I loved. I didn't want to go through all the steps of installing the necessary libraries and dependencies to get it to work, so I decided to create my own.
+As a long-time Openbox enthusiast, I've always found the default exit dialog a bit lackluster. Modern systems deserve a more refined shutdown experience. While there are other options out there, I figured one more wouldn't hurt, right?
 
-## Dependencies and compilation
+Inspired by the elegant `ssd` from Sawfish, I decided to create my own tailored solution for Openbox.  This way, you can avoid the hassle of installing extra dependencies and enjoy a sleek shutdown dialog that complements your Openbox setup.
 
-This app requires GTK+ 3.0, Glib 2 development libraries and gcc or clang.
+## Features
 
-To compile this program you can use `make` after you've edited `Makefile` or use the pre-defined options to install ssdd to `/usr/local`. The `Makefile` is pretty self explanatory.
+* **Clean and Intuitive Interface:** ssdd presents a clear choice between Shutdown, Reboot, Logout, and Exit options.
+* **Clean and minimal code:** `ssdd` is built on a clean and minimal codebase, making it easy to maintain, understand, and extend.
+* **Lightweight and Efficient:** ssdd is designed to be fast and resource-friendly, perfectly suited for Openbox's minimalist philosophy.
 
-To compile everything:
-`make all`
+## Dependencies and Compilation
 
-To clean up:
-`make clean`
+ssdd requires:
 
-To install:
-`sudo make install`
+* GTK+ 3.0
+* Glib 2 development libraries
+* gcc or clang
 
-Or if you want, you can compile it directly and copy the binary to a location in your `PATH`.
+### Easy Compilation
 
-Using GCC:
+Edit the `Makefile` or use the following commands:
+
 ```shell
-% gcc ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
+% make all     # Compile
+% sudo make install # Install to /usr/local
 ```
 
-Using Clang:
+### Manual compilation
+
 ```shell
+# Using GCC:
+% gcc ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
+
+# Using Clang:
 % clang ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
 ```
 
-This produces the binary `ssdd` which you can place in your $PATH. I place mine in `~/bin`. You can strip it but it'll only save you a few kilobytes, so it's basically unnecessary...
+Place the `ssdd` binary in your `$PATH` (e.g., `~/bin`).
 
-## Configure Openbox to use it.
+### Integrate with Openbox
 
-`% sudo nvim /etc/xdg/openbox/menu.xml`
+1. Edit your Openbox menu:
 
-Find the line with the standard Openbox Exit option and change it to
+```shell
+% sudo nvim /etc/xdg/openbox/menu.xml
+```
 
-`<item label="Log Out"><action name="Execute"><execute>ssdd</execute></item>`
+2. Replace the default Exit entry with:
 
-The reconfigure Openbox to use the new setting.
+```xml
+<item label="Log Out"><action name="Execute"><execute>ssdd</execute></action></item>
+```
 
-`% openbox --reconfigure`
+3. Reconfigure Openbox:
+
+```shell
+% openbox --reconfigure
+```
+
+### Contributing
+
+Contributions are welcome! Feel free to open issues or submit pull requests.
