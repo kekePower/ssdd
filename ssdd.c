@@ -161,7 +161,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
     };
 
     window = gtk_application_window_new(app);
-    gtk_window_set_title(GTK_WINDOW(window), "Exit Openbox");
+    gtk_window_set_title(GTK_WINDOW(window), "Simple ShutDown Dialog");
     gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
 
     // Load the icon from the resource and set it as the window icon
