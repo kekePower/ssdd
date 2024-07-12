@@ -37,7 +37,14 @@ Edit the `Makefile` or use the following commands:
 
 ### Manual compilation
 
-```shell
+First generate the resources.
+
+```bash
+% glib-compile-resources resources.gresource.xml --generate-source --target=resources.c
+% glib-compile-resources resources.gresource.xml --generate-header --target=resources.h
+```
+
+```bash
 # Using GCC:
 % gcc ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
 
@@ -51,7 +58,7 @@ Place the `ssdd` binary in your `$PATH` (e.g., `~/bin`).
 
 1. Edit your Openbox menu:
 
-```shell
+```bash
 % sudo nvim /etc/xdg/openbox/menu.xml
 ```
 
@@ -63,7 +70,7 @@ Place the `ssdd` binary in your `$PATH` (e.g., `~/bin`).
 
 3. Reconfigure Openbox:
 
-```shell
+```bash
 % openbox --reconfigure
 ```
 
