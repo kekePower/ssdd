@@ -36,7 +36,7 @@ static void show_about_dialog(GtkWidget *widget) {
     GtkWidget *box;
     const gchar *about_text =
         "\n<b>About Simple ShutDown Dialog</b>\n\n"
-        "<b>Version:</b> 1.3\n"
+        "<b>Version:</b> 1.4\n"
         "<b>Author:</b> kekePower\n"
         "<b>URL:</b> <a href=\"https://git.kekepower.com/kekePower/ssdd\">https://git.kekepower.com/kekePower/ssdd</a>\n"
         "<b>Description:</b> This is a simple Shutdown Dialog for Openbox.\n";
@@ -48,7 +48,7 @@ static void show_about_dialog(GtkWidget *widget) {
                                         GTK_RESPONSE_CLOSE,
                                         NULL);
     content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_container_add(GTK_CONTAINER(content_area), box);
 
     image = gtk_image_new_from_resource("/org/gtk/ssdd/ssdd-icon.png");
@@ -145,7 +145,7 @@ static void create_button(GtkWidget *grid, GtkApplication *app, const gchar *lab
     GtkWidget *label;
 
     button = gtk_button_new();
-    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10); // Set internal box spacing to 10
     gtk_container_add(GTK_CONTAINER(button), box);
 
     image = gtk_image_new_from_icon_name(icon_name, GTK_ICON_SIZE_BUTTON);
@@ -153,9 +153,12 @@ static void create_button(GtkWidget *grid, GtkApplication *app, const gchar *lab
 
     label = gtk_label_new(label_text);
     gtk_box_pack_start(GTK_BOX(box), label, TRUE, TRUE, 0);
-    
-    //Add margin to the button
-    gtk_widget_set_margin_top(button, 10);
+
+    // Set margins for the button contents
+    gtk_widget_set_margin_top(box, 5);
+    gtk_widget_set_margin_bottom(box, 5);
+    gtk_widget_set_margin_start(box, 5);
+    gtk_widget_set_margin_end(box, 5);
 
     g_object_set_data(G_OBJECT(button), "app", app);
     g_object_set_data(G_OBJECT(button), "label", (gpointer) label_text);
@@ -215,6 +218,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
     g_signal_connect(window, "key-press-event", G_CALLBACK(on_key_press), app);
 
     grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 0); // Set the row spacing to 0
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 0); // Set the column spacing to 0
     gtk_container_add(GTK_CONTAINER(window), grid);
 
     for (int i = 0; i < 8; i++) {
@@ -238,5 +243,3 @@ int main(int argc, char **argv) {
 
     return status;
 }
-
-
