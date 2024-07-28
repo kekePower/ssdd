@@ -17,7 +17,7 @@ RESOURCE_C = resources.c
 RESOURCE_H = resources.h
 
 # Installation directories
-PREFIX = /usr/local
+PREFIX ?= /usr/local
 BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/ssdd
 
