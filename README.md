@@ -33,6 +33,7 @@ Edit the `Makefile` or use the following commands:
 ```shell
 % make all     # Compile
 % sudo make install # Install to /usr/local
+% sudo make install PREFIX=/usr # Install to /usr
 ```
 
 ### Manual compilation
