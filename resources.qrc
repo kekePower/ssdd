@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="icons/ssdd-icon.png">ssdd-icon.png</file>
+    </qresource>
+</RCC>
+

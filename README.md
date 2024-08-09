@@ -4,6 +4,8 @@ A simple Shutdown Dialog for Openbox written in C using GTK
 
 ![Project Screenshot](ssdd.png)
 
+![Settings screenshot](ssdd-settings.png)
+
 **Simple Shutdown Dialog (ssdd)** is a simple yet stylish shutdown dialog for Openbox, crafted in C using GTK.
 
 ## Why ssdd?
