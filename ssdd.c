@@ -110,7 +110,7 @@ static void show_about_tab(GtkWidget *box) {
     GtkWidget *image;
     const gchar *about_text =
         "\n<b>About Simple ShutDown Dialog</b>\n\n"
-        "<b>Version:</b> 1.5\n"
+        "<b>Version:</b> 1.6\n"
         "<b>Author:</b> kekePower\n"
         "<b>URL: </b><a href=\"https://git.kekepower.com/kekePower/ssdd\">https://git.kekepower.com/kekePower/ssdd</a>\n"
         "<b>Description:</b> This is a Simple ShutDown Dialog for Openbox.\n";
@@ -227,15 +227,22 @@ static void save_configuration(const gchar *commands[]) {
     GError *error = NULL;
     g_mkdir_with_parents(CONFIG_DIR, 0755);
 
-    gchar *config_data = g_strjoinv("\n", (gchar **)commands);
-    g_file_set_contents(CONFIG_PATH, config_data, -1, &error);
+    GString *config_data = g_string_new(NULL);
+    g_string_append_printf(config_data, "LOGOUT_COMMAND=%s\n", commands[0]);
+    g_string_append_printf(config_data, "REBOOT_COMMAND=%s\n", commands[1]);
+    g_string_append_printf(config_data, "SHUTDOWN_COMMAND=%s\n", commands[2]);
+    g_string_append_printf(config_data, "SWITCH_USER_COMMAND=%s\n", commands[3]);
+    g_string_append_printf(config_data, "SUSPEND_COMMAND=%s\n", commands[4]);
+    g_string_append_printf(config_data, "HIBERNATE_COMMAND=%s\n", commands[5]);
+
+    g_file_set_contents(CONFIG_PATH, config_data->str, -1, &error);
 
     if (error) {
         g_warning("Failed to save configuration: %s", error->message);
         g_error_free(error);
     }
 
-    g_free(config_data);
+    g_string_free(config_data, TRUE);
 }
 
 static void load_configuration(gchar *commands[]) {
@@ -264,9 +271,23 @@ static void load_configuration(gchar *commands[]) {
         return;
     }
 
-    gchar **lines = g_strsplit(config_data, "\n", 6);
+    gchar **lines = g_strsplit(config_data, "\n", -1);
     for (int i = 0; i < 6; i++) {
-        commands[i] = g_strdup(lines[i]);
+        gchar **key_value = g_strsplit(lines[i], "=", 2);
+        if (g_strcmp0(key_value[0], "LOGOUT_COMMAND") == 0) {
+            commands[0] = g_strdup(key_value[1]);
+        } else if (g_strcmp0(key_value[0], "REBOOT_COMMAND") == 0) {
+            commands[1] = g_strdup(key_value[1]);
+        } else if (g_strcmp0(key_value[0], "SHUTDOWN_COMMAND") == 0) {
+            commands[2] = g_strdup(key_value[1]);
+        } else if (g_strcmp0(key_value[0], "SWITCH_USER_COMMAND") == 0) {
+            commands[3] = g_strdup(key_value[1]);
+        } else if (g_strcmp0(key_value[0], "SUSPEND_COMMAND") == 0) {
+            commands[4] = g_strdup(key_value[1]);
+        } else if (g_strcmp0(key_value[0], "HIBERNATE_COMMAND") == 0) {
+            commands[5] = g_strdup(key_value[1]);
+        }
+        g_strfreev(key_value);
     }
 
     g_strfreev(lines);
