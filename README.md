@@ -1,12 +1,14 @@
 # ssdd: Simple Shutdown Dialog for Openbox
 
-A simple Shutdown Dialog for Openbox written in C using GTK 
+A simple Shutdown Dialog for Openbox written in C using GTK 4
 
 ![Project Screenshot](ssdd.png)
 
 ![Settings screenshot](ssdd-settings.png)
 
-**Simple Shutdown Dialog (ssdd)** is a simple yet stylish shutdown dialog for Openbox, crafted in C using GTK.
+![Settings screenshot](ssdd-about.png)
+
+**Simple Shutdown Dialog (ssdd)** is a simple yet stylish shutdown dialog for Openbox, crafted in C using GTK 4.
 
 ## Why ssdd?
 
@@ -16,15 +18,16 @@ Inspired by the elegant `ssd` from Sawfish, I decided to create my own tailored 
 
 ## Features
 
-* **Clean and Intuitive Interface:** ssdd presents a clear choice between Shutdown, Reboot, Logout, and Exit options.
-* **Clean and minimal code:** `ssdd` is built on a clean and minimal codebase, making it easy to maintain, understand, and extend.
-* **Lightweight and Efficient:** ssdd is designed to be fast and resource-friendly, perfectly suited for Openbox's minimalist philosophy.
+- **Clean and Intuitive Interface:** ssdd presents clear options for Logout, Reboot, Shutdown, Switch User, Suspend, Hibernate, Settings, and Exit.
+- **Configurable Commands:** Easily customize the commands executed for each action via the settings dialog.
+- **Lightweight and Efficient:** Designed to be fast and resource-friendly, perfectly suited for Openbox's minimalist philosophy.
+- **Modern GTK 4 Interface:** Built with GTK 4 for a modern look and feel.
 
 ## Dependencies and Compilation
 
 ssdd requires:
 
-* GTK+ 3.0
+* GTK 4 development libraries
 * Glib 2 development libraries
 * gcc or clang
 
@@ -49,10 +52,10 @@ First generate the resources.
 
 ```bash
 # Using GCC:
-% gcc ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
+% gcc ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk4`
 
 # Using Clang:
-% clang ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk+-3.0`
+% clang ssdd.c resources.c -o ssdd `pkg-config --cflags --libs gtk4`
 ```
 
 Place the `ssdd` binary in your `$PATH` (e.g., `~/bin`).
@@ -80,3 +83,4 @@ Place the `ssdd` binary in your `$PATH` (e.g., `~/bin`).
 ### Contributing
 
 Contributions are welcome! Feel free to open issues or submit pull requests.
+

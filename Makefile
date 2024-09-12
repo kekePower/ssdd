@@ -2,8 +2,11 @@
 CC = gcc
 
 # Compiler and optimization flags
-CFLAGS = `pkg-config --cflags gtk+-3.0` -O3
-LDFLAGS = `pkg-config --libs gtk+-3.0`
+CFLAGS ?= -Wall -O2
+CFLAGS += $(shell pkg-config --cflags gtk4)
+CFLAGS += -DGDK_VERSION_MAX_ALLOWED=GDK_VERSION_4_0 -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_4_0
+LDFLAGS ?=
+LDFLAGS += $(shell pkg-config --libs gtk4)
 
 # Source files
 SRC = ssdd.c resources.c
@@ -35,15 +38,15 @@ $(RESOURCE_C) $(RESOURCE_H): $(RESOURCE_XML)
 
 # Install target
 install: $(TARGET)
-	install -d $(BINDIR)
-	install -m 755 $(TARGET) $(BINDIR)
-	install -d $(DATADIR)
-	install -m 644 $(RESOURCE_XML) $(DATADIR)
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)
+	install -d $(DESTDIR)$(DATADIR)
+	install -m 644 $(RESOURCE_XML) $(DESTDIR)$(DATADIR)
 
 # Uninstall target
 uninstall:
-	rm -f $(BINDIR)/$(TARGET)
-	rm -rf $(DATADIR)
+	rm -f $(DESTDIR)$(BINDIR)/$(TARGET)
+	rm -rf $(DESTDIR)$(DATADIR)
 
 # Clean target
 clean:
