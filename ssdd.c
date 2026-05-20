@@ -4,6 +4,17 @@
 #include <string.h>
 #include "resources.h"
 
+#define NUM_COMMANDS 6
+
+static const gchar *DEFAULT_COMMANDS[] = {
+    "openbox --exit",
+    "systemctl reboot",
+    "systemctl poweroff",
+    "dm-tool switch-to-greeter",
+    "systemctl suspend",
+    "systemctl hibernate"
+};
+
 // Function declarations
 static void execute_command(const gchar *command, GtkWindow *parent);
 static void show_settings_dialog(GtkWindow *parent);
@@ -100,7 +111,7 @@ static void show_settings_tab(GtkWidget *box) {
         "Hibernate Command"
     };
 
-    gchar *commands[6];
+    gchar *commands[NUM_COMMANDS];
     load_configuration(commands);
 
     GtkWidget *grid = gtk_grid_new();
@@ -108,9 +119,9 @@ static void show_settings_tab(GtkWidget *box) {
     gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
     gtk_box_append(GTK_BOX(box), grid);
 
-    GtkWidget **entries = g_new(GtkWidget*, 6);
+    GtkWidget **entries = g_new(GtkWidget*, NUM_COMMANDS);
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < NUM_COMMANDS; i++) {
         GtkWidget *label = gtk_label_new(labels[i]);
         GtkWidget *entry = gtk_entry_new();
         gtk_editable_set_text(GTK_EDITABLE(entry), commands[i]);
@@ -128,20 +139,25 @@ static void show_settings_tab(GtkWidget *box) {
     g_signal_connect(save_button, "clicked", G_CALLBACK(on_save_button_clicked), NULL);
     gtk_box_append(GTK_BOX(box), save_button);
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < NUM_COMMANDS; i++) {
         g_free(commands[i]);
     }
 }
 
 static void on_save_button_clicked(GtkButton *button, gpointer user_data) {
     GtkWidget **entries = g_object_get_data(G_OBJECT(button), "entries");
-    const gchar *commands[6];
+    const gchar *commands[NUM_COMMANDS];
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < NUM_COMMANDS; i++) {
         commands[i] = gtk_editable_get_text(GTK_EDITABLE(entries[i]));
     }
 
     save_configuration(commands);
+
+    GtkWidget *toast = gtk_label_new("Configuration saved.");
+    gtk_widget_set_halign(toast, GTK_ALIGN_CENTER);
+    GtkWidget *box = gtk_widget_get_parent(GTK_WIDGET(button));
+    gtk_box_append(GTK_BOX(box), toast);
 }
 
 static void show_about_tab(GtkWidget *box) {
@@ -155,7 +171,7 @@ static void show_about_tab(GtkWidget *box) {
         "<b>Description:</b> A Simple ShutDown Dialog for Openbox.\n";
 
     image = gtk_image_new_from_resource("/org/gtk/ssdd/ssdd-icon.png");
-    gtk_image_set_pixel_size(GTK_IMAGE(image), 250);
+    gtk_image_set_pixel_size(GTK_IMAGE(image), 128);
     gtk_box_append(GTK_BOX(box), image);
 
     label = gtk_label_new(NULL);
@@ -170,7 +186,7 @@ static void button_clicked(GtkWidget *widget, gpointer data) {
     const gchar *command = (const gchar *)data;
     const gchar *label = g_object_get_data(G_OBJECT(widget), "label");
     GtkApplication *app = g_object_get_data(G_OBJECT(widget), "app");
-    GtkWindow *parent_window = GTK_WINDOW(gtk_widget_get_root(widget));
+    GtkWindow *parent_window = GTK_WINDOW(gtk_application_get_active_window(app));
 
     if (g_strcmp0(command, "exit") == 0) {
         g_application_quit(G_APPLICATION(app));
@@ -289,44 +305,40 @@ static void load_configuration(gchar *commands[]) {
     gchar *config_dir = get_config_dir();
     gchar *config_path = get_config_path();
 
+    // Initialize all commands to NULL before anything else
+    for (int i = 0; i < NUM_COMMANDS; i++) {
+        commands[i] = NULL;
+    }
+
     g_mkdir_with_parents(config_dir, 0755);
 
     if (!g_file_test(config_path, G_FILE_TEST_EXISTS)) {
         g_warning("Configuration file not found. Generating a default configuration.");
-        const gchar *default_commands[] = {
-            "openbox --exit",
-            "systemctl reboot",
-            "systemctl poweroff",
-            "dm-tool switch-to-greeter",
-            "systemctl suspend",
-            "systemctl hibernate"
-        };
-        save_configuration(default_commands);
+        save_configuration(DEFAULT_COMMANDS);
     }
 
     if (!g_file_get_contents(config_path, &config_data, NULL, &error)) {
         g_warning("Failed to load configuration: %s", error->message);
         g_error_free(error);
+        // Fall back to defaults after read failure
+        for (int i = 0; i < NUM_COMMANDS; i++) {
+            commands[i] = g_strdup(DEFAULT_COMMANDS[i]);
+        }
         g_free(config_dir);
         g_free(config_path);
         return;
     }
 
     gchar **lines = g_strsplit(config_data, "\n", -1);
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; lines[i] != NULL; i++) {
+        if (g_strcmp0(lines[i], "") == 0) {
+            continue;
+        }
+
         gchar **key_value = g_strsplit(lines[i], "=", 2);
 
         if (!key_value[0] || !key_value[1]) {
-            g_warning("Invalid entry in configuration file at line %d. Using default command.", i + 1);
-            const gchar *default_commands[] = {
-                "openbox --exit",
-                "systemctl reboot",
-                "systemctl poweroff",
-                "dm-tool switch-to-greeter",
-                "systemctl suspend",
-                "systemctl hibernate"
-            };
-            commands[i] = g_strdup(default_commands[i]);
+            g_warning("Invalid entry in configuration file at line %d.", i + 1);
             g_strfreev(key_value);
             continue;
         }
@@ -350,18 +362,11 @@ static void load_configuration(gchar *commands[]) {
         g_strfreev(key_value);
     }
 
-    for (int i = 0; i < 6; i++) {
+    // Fill any remaining NULL entries with defaults
+    for (int i = 0; i < NUM_COMMANDS; i++) {
         if (commands[i] == NULL || g_strcmp0(commands[i], "") == 0) {
-            g_warning("Command at index %d is invalid. Assigning default value.", i);
-            const gchar *default_commands[] = {
-                "openbox --exit",
-                "systemctl reboot",
-                "systemctl poweroff",
-                "dm-tool switch-to-greeter",
-                "systemctl suspend",
-                "systemctl hibernate"
-            };
-            commands[i] = g_strdup(default_commands[i]);
+            g_free(commands[i]);
+            commands[i] = g_strdup(DEFAULT_COMMANDS[i]);
         }
     }
 
@@ -374,7 +379,7 @@ static void load_configuration(gchar *commands[]) {
 static void activate(GtkApplication *app, gpointer user_data) {
     GtkWidget *window;
     GtkWidget *grid;
-    gchar *commands[6];
+    gchar *commands[NUM_COMMANDS];
     load_configuration(commands);
 
     const gchar *icons[] = {
@@ -411,7 +416,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_widget_set_margin_end(grid, 10);
     gtk_window_set_child(GTK_WINDOW(window), grid);
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < NUM_COMMANDS; i++) {
         create_button(grid, app, labels[i], icons[i], commands[i], i);
         g_free(commands[i]);
     }

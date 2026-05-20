@@ -1,3 +1,7 @@
 ssdd
 resources.c
 resources.h
+
+# ZaguanBlade local data
+.zblade/
+.pnpm-store/
