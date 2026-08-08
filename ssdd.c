@@ -1,446 +1,467 @@
-#include <gtk/gtk.h>
+#include <errno.h>
+
 #include <glib/gstdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "resources.h"
+#include <gtk/gtk.h>
 
-#define NUM_COMMANDS 6
+#define CONFIG_DIR_NAME "ssdd"
+#define CONFIG_FILE_NAME "config"
+#define CONFIG_GROUP "Commands"
+#define APP_VERSION "2.2"
 
-static const gchar *DEFAULT_COMMANDS[] = {
-    "openbox --exit",
-    "systemctl reboot",
-    "systemctl poweroff",
-    "dm-tool switch-to-greeter",
-    "systemctl suspend",
-    "systemctl hibernate"
-};
+typedef enum {
+  ACTION_LOGOUT,
+  ACTION_REBOOT,
+  ACTION_SHUTDOWN,
+  ACTION_SWITCH_USER,
+  ACTION_SUSPEND,
+  ACTION_HIBERNATE,
+  N_CONFIG_ACTIONS,
+  ACTION_SETTINGS = N_CONFIG_ACTIONS,
+  ACTION_EXIT,
+  N_ACTIONS
+} ActionId;
 
-// Function declarations
+typedef struct {
+  const gchar *label;
+  const gchar *icon_name;
+  const gchar *config_key;
+  const gchar *default_command;
+} ActionSpec;
+
+typedef struct {
+  gchar *commands[N_CONFIG_ACTIONS];
+} AppState;
+
+typedef struct {
+  AppState *state;
+  GtkWidget *entries[N_CONFIG_ACTIONS];
+} SettingsData;
+
+static const ActionSpec actions[N_ACTIONS] = {
+    [ACTION_LOGOUT] = {"Logout", "system-log-out-symbolic", "LOGOUT_COMMAND",
+                       "openbox --exit"},
+    [ACTION_REBOOT] = {"Reboot", "system-reboot-symbolic", "REBOOT_COMMAND",
+                       "systemctl reboot"},
+    [ACTION_SHUTDOWN] = {"Shutdown", "system-shutdown-symbolic",
+                         "SHUTDOWN_COMMAND", "systemctl poweroff"},
+    [ACTION_SWITCH_USER] = {"Switch User", "system-users-symbolic",
+                            "SWITCH_USER_COMMAND", "dm-tool switch-to-greeter"},
+    [ACTION_SUSPEND] = {"Suspend", "media-playback-pause-symbolic",
+                        "SUSPEND_COMMAND", "systemctl suspend"},
+    [ACTION_HIBERNATE] = {"Hibernate", "document-save-symbolic",
+                          "HIBERNATE_COMMAND", "systemctl hibernate"},
+    [ACTION_SETTINGS] = {"Settings", "preferences-system-symbolic", NULL, NULL},
+    [ACTION_EXIT] = {"Exit", "window-close-symbolic", NULL, NULL}};
+
+G_STATIC_ASSERT(G_N_ELEMENTS(actions) == N_ACTIONS);
+
+static void activate(GtkApplication *app, gpointer user_data);
+static void app_state_free(gpointer data);
+static void button_clicked(GtkButton *button, gpointer user_data);
+static void create_button(GtkWidget *grid, ActionId action_id);
 static void execute_command(const gchar *command, GtkWindow *parent);
-static void show_settings_dialog(GtkWindow *parent);
-static void show_about_tab(GtkWidget *box);
-static void show_settings_tab(GtkWidget *box);
-static void button_clicked(GtkWidget *widget, gpointer data);
-static gboolean on_key_pressed(GtkEventControllerKey *controller, guint keyval, guint keycode, GdkModifierType state, gpointer user_data);
-static void show_confirmation_dialog(GtkWindow *parent_window, const gchar *label, const gchar *command);
-static void create_button(GtkWidget *grid, GtkApplication *app, const gchar *label_text, const gchar *icon_name, const gchar *command, int pos);
-static void save_configuration(const gchar *commands[]);
-static void load_configuration(gchar *commands[]);
-static gchar *get_config_path(void);
-static gchar *get_config_dir(void);
+static gchar *get_config_path(GError **error);
+static void load_configuration(AppState *state);
+static gboolean on_key_pressed(GtkEventControllerKey *controller, guint keyval,
+                               guint keycode, GdkModifierType state,
+                               gpointer user_data);
+static void on_confirmation_response(GtkDialog *dialog, gint response_id,
+                                     gpointer user_data);
 static void on_save_button_clicked(GtkButton *button, gpointer user_data);
-static void on_confirmation_response(GtkDialog *dialog, gint response_id, gpointer user_data);
+static gboolean save_configuration(const gchar *const commands[],
+                                   GError **error);
+static void show_about_tab(GtkWidget *box);
+static void show_confirmation_dialog(GtkWindow *parent, const gchar *label,
+                                     const gchar *command);
+static void show_message_dialog(GtkWindow *parent, GtkMessageType type,
+                                GtkButtonsType buttons, const gchar *title,
+                                const gchar *message);
+static void show_settings_dialog(GtkWindow *parent, AppState *state);
+static void show_settings_tab(GtkWidget *box, AppState *state);
 
-static gchar *get_config_dir(void) {
-    return g_build_filename(g_get_user_config_dir(), "ssdd", NULL);
+static void app_state_free(gpointer data) {
+  AppState *state = data;
+
+  for (guint i = 0; i < N_CONFIG_ACTIONS; i++)
+    g_free(state->commands[i]);
+
+  g_free(state);
 }
 
-static gchar *get_config_path(void) {
-    return g_build_filename(g_get_user_config_dir(), "ssdd", "config", NULL);
+static void app_state_set_command(AppState *state, guint index,
+                                  const gchar *command) {
+  g_return_if_fail(index < N_CONFIG_ACTIONS);
+
+  g_free(state->commands[index]);
+  state->commands[index] = g_strdup(command);
+}
+
+static gchar *get_config_path(GError **error) {
+  g_autofree gchar *config_dir =
+      g_build_filename(g_get_user_config_dir(), CONFIG_DIR_NAME, NULL);
+
+  if (g_mkdir_with_parents(config_dir, 0755) == -1) {
+    gint saved_errno = errno;
+
+    g_set_error(error, G_FILE_ERROR, g_file_error_from_errno(saved_errno),
+                "Could not create configuration directory '%s': %s", config_dir,
+                g_strerror(saved_errno));
+    return NULL;
+  }
+
+  return g_build_filename(config_dir, CONFIG_FILE_NAME, NULL);
+}
+
+static gboolean save_configuration(const gchar *const commands[],
+                                   GError **error) {
+  g_autofree gchar *config_path = get_config_path(error);
+  g_autoptr(GKeyFile) key_file = NULL;
+
+  if (config_path == NULL)
+    return FALSE;
+
+  key_file = g_key_file_new();
+
+  for (guint i = 0; i < N_CONFIG_ACTIONS; i++) {
+    g_key_file_set_string(key_file, CONFIG_GROUP, actions[i].config_key,
+                          commands[i] != NULL ? commands[i] : "");
+  }
+
+  return g_key_file_save_to_file(key_file, config_path, error);
+}
+
+static void load_configuration(AppState *state) {
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *config_path = get_config_path(&error);
+  g_autoptr(GKeyFile) key_file = g_key_file_new();
+  gboolean needs_save = FALSE;
+
+  if (config_path == NULL ||
+      !g_key_file_load_from_file(
+          key_file, config_path,
+          G_KEY_FILE_KEEP_COMMENTS | G_KEY_FILE_KEEP_TRANSLATIONS, &error)) {
+    g_warning("Could not load configuration%s%s. Using defaults.",
+              error != NULL ? ": " : "", error != NULL ? error->message : "");
+
+    for (guint i = 0; i < N_CONFIG_ACTIONS; i++)
+      app_state_set_command(state, i, actions[i].default_command);
+
+    if (config_path != NULL) {
+      const gchar *commands[N_CONFIG_ACTIONS];
+      g_autoptr(GError) save_error = NULL;
+
+      for (guint i = 0; i < N_CONFIG_ACTIONS; i++)
+        commands[i] = state->commands[i];
+
+      if (!save_configuration(commands, &save_error))
+        g_warning("Could not save default configuration: %s",
+                  save_error->message);
+    }
+    return;
+  }
+
+  for (guint i = 0; i < N_CONFIG_ACTIONS; i++) {
+    g_autofree gchar *command = g_key_file_get_string(
+        key_file, CONFIG_GROUP, actions[i].config_key, NULL);
+
+    if (command == NULL || *command == '\0') {
+      g_warning(
+          "Configuration key '%s' is missing or empty; using default '%s'",
+          actions[i].config_key, actions[i].default_command);
+      app_state_set_command(state, i, actions[i].default_command);
+      needs_save = TRUE;
+    } else {
+      app_state_set_command(state, i, command);
+    }
+  }
+
+  if (needs_save) {
+    const gchar *commands[N_CONFIG_ACTIONS];
+    g_autoptr(GError) save_error = NULL;
+
+    for (guint i = 0; i < N_CONFIG_ACTIONS; i++)
+      commands[i] = state->commands[i];
+
+    if (!save_configuration(commands, &save_error))
+      g_warning("Could not repair configuration: %s", save_error->message);
+  }
+}
+
+static void show_message_dialog(GtkWindow *parent, GtkMessageType type,
+                                GtkButtonsType buttons, const gchar *title,
+                                const gchar *message) {
+  GtkWidget *dialog = gtk_message_dialog_new(
+      parent, GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, type, buttons,
+      "%s", message);
+
+  gtk_window_set_title(GTK_WINDOW(dialog), title);
+  g_signal_connect(dialog, "response", G_CALLBACK(gtk_window_destroy), NULL);
+  gtk_window_present(GTK_WINDOW(dialog));
 }
 
 static void execute_command(const gchar *command, GtkWindow *parent) {
-    GError *error = NULL;
-    gboolean ret = g_spawn_command_line_async(command, &error);
-    if (!ret) {
-        gchar *error_message = g_strdup_printf("Error executing command '%s': %s", command, error->message);
+  g_autoptr(GError) error = NULL;
 
-        GtkWidget *dialog = gtk_message_dialog_new(parent,
-                                                   GTK_DIALOG_MODAL,
-                                                   GTK_MESSAGE_ERROR,
-                                                   GTK_BUTTONS_CLOSE,
-                                                   "%s", error_message);
-        g_signal_connect(dialog, "response", G_CALLBACK(gtk_window_destroy), NULL);
-        gtk_window_present(GTK_WINDOW(dialog));
+  if (!g_spawn_command_line_async(command, &error)) {
+    g_autofree gchar *message = g_strdup_printf(
+        "Could not execute:\n'%s'\n\nReason: %s", command, error->message);
 
-        g_free(error_message);
-        g_error_free(error);
-    }
-}
-
-static void show_settings_dialog(GtkWindow *parent) {
-    GtkWidget *dialog;
-    GtkWidget *content_area;
-    GtkWidget *notebook;
-    GtkWidget *settings_tab;
-    GtkWidget *about_tab;
-
-    dialog = gtk_dialog_new();
-    gtk_window_set_title(GTK_WINDOW(dialog), "Settings");
-    gtk_window_set_transient_for(GTK_WINDOW(dialog), parent);
-    gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
-    gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
-
-    content_area = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_window_set_child(GTK_WINDOW(dialog), content_area);
-
-    notebook = gtk_notebook_new();
-    gtk_box_append(GTK_BOX(content_area), notebook);
-
-    settings_tab = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    gtk_widget_set_margin_top(settings_tab, 10);
-    gtk_widget_set_margin_bottom(settings_tab, 10);
-    gtk_widget_set_margin_start(settings_tab, 10);
-    gtk_widget_set_margin_end(settings_tab, 10);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), settings_tab, gtk_label_new("Settings"));
-
-    about_tab = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    gtk_widget_set_margin_top(about_tab, 10);
-    gtk_widget_set_margin_bottom(about_tab, 10);
-    gtk_widget_set_margin_start(about_tab, 10);
-    gtk_widget_set_margin_end(about_tab, 10);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), about_tab, gtk_label_new("About"));
-
-    show_settings_tab(settings_tab);
-    show_about_tab(about_tab);
-
-    GtkWidget *close_button = gtk_button_new_with_label("Close");
-    gtk_box_append(GTK_BOX(content_area), close_button);
-    g_signal_connect_swapped(close_button, "clicked", G_CALLBACK(gtk_window_destroy), dialog);
-
-    gtk_window_present(GTK_WINDOW(dialog));
-}
-
-static void show_settings_tab(GtkWidget *box) {
-    const gchar *labels[] = {
-        "Logout Command",
-        "Reboot Command",
-        "Shutdown Command",
-        "Switch User Command",
-        "Suspend Command",
-        "Hibernate Command"
-    };
-
-    gchar *commands[NUM_COMMANDS];
-    load_configuration(commands);
-
-    GtkWidget *grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
-    gtk_box_append(GTK_BOX(box), grid);
-
-    GtkWidget **entries = g_new(GtkWidget*, NUM_COMMANDS);
-
-    for (int i = 0; i < NUM_COMMANDS; i++) {
-        GtkWidget *label = gtk_label_new(labels[i]);
-        GtkWidget *entry = gtk_entry_new();
-        gtk_editable_set_text(GTK_EDITABLE(entry), commands[i]);
-        gtk_widget_set_hexpand(entry, TRUE);
-        gtk_widget_set_halign(label, GTK_ALIGN_END);
-
-        gtk_grid_attach(GTK_GRID(grid), label, 0, i, 1, 1);
-        gtk_grid_attach(GTK_GRID(grid), entry, 1, i, 1, 1);
-
-        entries[i] = entry;
-    }
-
-    GtkWidget *save_button = gtk_button_new_with_label("Save");
-    g_object_set_data_full(G_OBJECT(save_button), "entries", entries, (GDestroyNotify)g_free);
-    g_signal_connect(save_button, "clicked", G_CALLBACK(on_save_button_clicked), NULL);
-    gtk_box_append(GTK_BOX(box), save_button);
-
-    for (int i = 0; i < NUM_COMMANDS; i++) {
-        g_free(commands[i]);
-    }
-}
-
-static void on_save_button_clicked(GtkButton *button, gpointer user_data) {
-    GtkWidget **entries = g_object_get_data(G_OBJECT(button), "entries");
-    const gchar *commands[NUM_COMMANDS];
-
-    for (int i = 0; i < NUM_COMMANDS; i++) {
-        commands[i] = gtk_editable_get_text(GTK_EDITABLE(entries[i]));
-    }
-
-    save_configuration(commands);
-
-    GtkWidget *toast = gtk_label_new("Configuration saved.");
-    gtk_widget_set_halign(toast, GTK_ALIGN_CENTER);
-    GtkWidget *box = gtk_widget_get_parent(GTK_WIDGET(button));
-    gtk_box_append(GTK_BOX(box), toast);
+    show_message_dialog(parent, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
+                        "Error Executing Command", message);
+  }
 }
 
 static void show_about_tab(GtkWidget *box) {
-    GtkWidget *label;
-    GtkWidget *image;
-    const gchar *about_text =
-        "\n<b>About Simple ShutDown Dialog</b>\n\n"
-        "<b>Version:</b> 2.0\n"
-        "<b>Author:</b> kekePower\n"
-        "<b>URL: </b><a href=\"https://git.kekepower.com/kekePower/ssdd\">https://git.kekepower.com/kekePower/ssdd</a>\n"
-        "<b>Description:</b> A Simple ShutDown Dialog for Openbox.\n";
+  static const gchar about_text[] =
+      "\n<b>Simple ShutDown Dialog</b>\n\n"
+      "<b>Version:</b> " APP_VERSION "\n"
+      "<b>Author:</b> kekePower\n"
+      "<b>URL: </b><a href=\"https://git.kekepower.com/kekePower/ssdd\">"
+      "https://git.kekepower.com/kekePower/ssdd</a>\n"
+      "<b>Description:</b> A Simple ShutDown Dialog for session management.\n";
+  GtkWidget *image = gtk_image_new_from_resource("/org/gtk/ssdd/ssdd-icon.png");
+  GtkWidget *label = gtk_label_new(NULL);
 
-    image = gtk_image_new_from_resource("/org/gtk/ssdd/ssdd-icon.png");
-    gtk_image_set_pixel_size(GTK_IMAGE(image), 128);
-    gtk_box_append(GTK_BOX(box), image);
+  gtk_image_set_pixel_size(GTK_IMAGE(image), 128);
+  gtk_widget_set_halign(image, GTK_ALIGN_CENTER);
+  gtk_widget_set_margin_bottom(image, 10);
+  gtk_box_append(GTK_BOX(box), image);
 
-    label = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(label), about_text);
-    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
-    gtk_widget_set_halign(label, GTK_ALIGN_START);
-    gtk_widget_set_valign(label, GTK_ALIGN_START);
-    gtk_box_append(GTK_BOX(box), label);
+  gtk_label_set_markup(GTK_LABEL(label), about_text);
+  gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+  gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+  gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(label, GTK_ALIGN_START);
+  gtk_box_append(GTK_BOX(box), label);
 }
 
-static void button_clicked(GtkWidget *widget, gpointer data) {
-    const gchar *command = (const gchar *)data;
-    const gchar *label = g_object_get_data(G_OBJECT(widget), "label");
-    GtkApplication *app = g_object_get_data(G_OBJECT(widget), "app");
-    GtkWindow *parent_window = GTK_WINDOW(gtk_application_get_active_window(app));
+static void show_settings_tab(GtkWidget *box, AppState *state) {
+  GtkWidget *grid = gtk_grid_new();
+  GtkWidget *save_button = gtk_button_new_with_label("Save");
+  SettingsData *settings = g_new0(SettingsData, 1);
 
-    if (g_strcmp0(command, "exit") == 0) {
-        g_application_quit(G_APPLICATION(app));
-        return;
-    }
+  settings->state = state;
 
-    if (g_strcmp0(command, "settings") == 0) {
-        show_settings_dialog(parent_window);
-    } else {
-        show_confirmation_dialog(parent_window, label, command);
-    }
+  gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
+  gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
+  gtk_box_append(GTK_BOX(box), grid);
+
+  for (guint i = 0; i < N_CONFIG_ACTIONS; i++) {
+    g_autofree gchar *label_text =
+        g_strdup_printf("%s Command:", actions[i].label);
+    GtkWidget *label = gtk_label_new(label_text);
+    GtkWidget *entry = gtk_entry_new();
+
+    gtk_editable_set_text(GTK_EDITABLE(entry), state->commands[i]);
+    gtk_widget_set_hexpand(entry, TRUE);
+    gtk_widget_set_halign(label, GTK_ALIGN_END);
+    gtk_grid_attach(GTK_GRID(grid), label, 0, (gint)i, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), entry, 1, (gint)i, 1, 1);
+    settings->entries[i] = entry;
+  }
+
+  gtk_widget_set_halign(save_button, GTK_ALIGN_END);
+  gtk_widget_set_margin_top(save_button, 10);
+  g_object_set_data_full(G_OBJECT(save_button), "settings", settings, g_free);
+  g_signal_connect(save_button, "clicked", G_CALLBACK(on_save_button_clicked),
+                   NULL);
+  gtk_box_append(GTK_BOX(box), save_button);
 }
 
-static gboolean on_key_pressed(GtkEventControllerKey *controller, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
-    if (keyval == GDK_KEY_Escape) {
-        GtkApplication *app = GTK_APPLICATION(user_data);
-        g_application_quit(G_APPLICATION(app));
-        return TRUE;
+static void show_settings_dialog(GtkWindow *parent, AppState *state) {
+  GtkWidget *dialog = gtk_dialog_new();
+  GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  GtkWidget *notebook = gtk_notebook_new();
+  GtkWidget *settings_tab = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  GtkWidget *about_tab = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+
+  gtk_window_set_title(GTK_WINDOW(dialog), "Settings");
+  gtk_window_set_transient_for(GTK_WINDOW(dialog), parent);
+  gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
+  gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
+  gtk_window_set_child(GTK_WINDOW(dialog), content);
+  gtk_box_append(GTK_BOX(content), notebook);
+
+  gtk_widget_set_margin_top(settings_tab, 10);
+  gtk_widget_set_margin_bottom(settings_tab, 10);
+  gtk_widget_set_margin_start(settings_tab, 10);
+  gtk_widget_set_margin_end(settings_tab, 10);
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), settings_tab,
+                           gtk_label_new("Settings"));
+  show_settings_tab(settings_tab, state);
+
+  gtk_widget_set_margin_top(about_tab, 10);
+  gtk_widget_set_margin_bottom(about_tab, 10);
+  gtk_widget_set_margin_start(about_tab, 10);
+  gtk_widget_set_margin_end(about_tab, 10);
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), about_tab,
+                           gtk_label_new("About"));
+  show_about_tab(about_tab);
+
+  gtk_dialog_add_button(GTK_DIALOG(dialog), "_Close", GTK_RESPONSE_CLOSE);
+  g_signal_connect(dialog, "response", G_CALLBACK(gtk_window_destroy), NULL);
+  gtk_window_present(GTK_WINDOW(dialog));
+}
+
+static void on_save_button_clicked(GtkButton *button,
+                                   gpointer user_data G_GNUC_UNUSED) {
+  SettingsData *settings = g_object_get_data(G_OBJECT(button), "settings");
+  const gchar *commands[N_CONFIG_ACTIONS];
+  g_autoptr(GError) error = NULL;
+  GtkWindow *parent = GTK_WINDOW(gtk_widget_get_root(GTK_WIDGET(button)));
+
+  for (guint i = 0; i < N_CONFIG_ACTIONS; i++) {
+    GtkEditable *entry = GTK_EDITABLE(settings->entries[i]);
+    const gchar *command = gtk_editable_get_text(entry);
+
+    if (*command == '\0') {
+      gtk_editable_set_text(entry, actions[i].default_command);
+      command = gtk_editable_get_text(entry);
     }
+
+    commands[i] = command;
+  }
+
+  if (!save_configuration(commands, &error)) {
+    g_autofree gchar *message = g_strdup_printf(
+        "Could not save the settings.\n\nReason: %s", error->message);
+    show_message_dialog(parent, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
+                        "Error Saving Settings", message);
+    return;
+  }
+
+  for (guint i = 0; i < N_CONFIG_ACTIONS; i++)
+    app_state_set_command(settings->state, i, commands[i]);
+
+  show_message_dialog(parent, GTK_MESSAGE_INFO, GTK_BUTTONS_OK,
+                      "Settings Saved", "Settings saved successfully.");
+}
+
+static void show_confirmation_dialog(GtkWindow *parent, const gchar *label,
+                                     const gchar *command) {
+  g_autofree gchar *message =
+      g_strdup_printf("Are you sure you want to %s?", label);
+  GtkWidget *dialog = gtk_message_dialog_new(
+      parent, GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+      GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO, "%s", message);
+
+  gtk_window_set_title(GTK_WINDOW(dialog), "Confirmation");
+  g_object_set_data_full(G_OBJECT(dialog), "command", g_strdup(command),
+                         g_free);
+  g_signal_connect(dialog, "response", G_CALLBACK(on_confirmation_response),
+                   NULL);
+  gtk_window_present(GTK_WINDOW(dialog));
+}
+
+static void on_confirmation_response(GtkDialog *dialog, gint response_id,
+                                     gpointer user_data G_GNUC_UNUSED) {
+  if (response_id == GTK_RESPONSE_YES) {
+    const gchar *command = g_object_get_data(G_OBJECT(dialog), "command");
+    GtkWindow *parent = gtk_window_get_transient_for(GTK_WINDOW(dialog));
+
+    if (command != NULL && parent != NULL)
+      execute_command(command, parent);
+    else
+      g_warning("Confirmation dialog is missing its command or parent");
+  }
+
+  gtk_window_destroy(GTK_WINDOW(dialog));
+}
+
+static void button_clicked(GtkButton *button,
+                           gpointer user_data G_GNUC_UNUSED) {
+  ActionId action_id = (ActionId)(GPOINTER_TO_UINT(g_object_get_data(
+                                      G_OBJECT(button), "action-id")) -
+                                  1);
+  GtkWindow *window = GTK_WINDOW(gtk_widget_get_root(GTK_WIDGET(button)));
+  GtkApplication *app = gtk_window_get_application(window);
+  AppState *state = g_object_get_data(G_OBJECT(app), "app-state");
+
+  g_return_if_fail(action_id >= 0 && action_id < N_ACTIONS);
+
+  if (action_id == ACTION_EXIT) {
+    g_application_quit(G_APPLICATION(app));
+  } else if (action_id == ACTION_SETTINGS) {
+    show_settings_dialog(window, state);
+  } else {
+    show_confirmation_dialog(window, actions[action_id].label,
+                             state->commands[action_id]);
+  }
+}
+
+static gboolean on_key_pressed(GtkEventControllerKey *controller G_GNUC_UNUSED,
+                               guint keyval, guint keycode G_GNUC_UNUSED,
+                               GdkModifierType state G_GNUC_UNUSED,
+                               gpointer user_data) {
+  if (keyval != GDK_KEY_Escape)
     return FALSE;
+
+  g_application_quit(G_APPLICATION(user_data));
+  return TRUE;
 }
 
-static void show_confirmation_dialog(GtkWindow *parent_window, const gchar *label, const gchar *command) {
-    GtkWidget *dialog;
-    gchar *message = g_strdup_printf("Are you sure you want to %s?", label);
+static void create_button(GtkWidget *grid, ActionId action_id) {
+  const ActionSpec *action = &actions[action_id];
+  GtkWidget *button = gtk_button_new();
+  GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+  GtkWidget *image = gtk_image_new_from_icon_name(action->icon_name);
+  GtkWidget *label = gtk_label_new(action->label);
 
-    dialog = gtk_message_dialog_new(parent_window,
-                                    GTK_DIALOG_MODAL,
-                                    GTK_MESSAGE_QUESTION,
-                                    GTK_BUTTONS_YES_NO,
-                                    "%s", message);
+  gtk_widget_set_hexpand(button, TRUE);
+  gtk_widget_set_vexpand(button, TRUE);
+  gtk_widget_set_valign(box, GTK_ALIGN_CENTER);
+  gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
+  gtk_button_set_child(GTK_BUTTON(button), box);
+  gtk_image_set_icon_size(GTK_IMAGE(image), GTK_ICON_SIZE_LARGE);
+  gtk_box_append(GTK_BOX(box), image);
+  gtk_box_append(GTK_BOX(box), label);
 
-    // Pass the command via g_object_set_data
-    g_object_set_data_full(G_OBJECT(dialog), "command", g_strdup(command), g_free);
-
-    g_signal_connect(dialog, "response", G_CALLBACK(on_confirmation_response), NULL);
-
-    gtk_window_present(GTK_WINDOW(dialog));
-    g_free(message);
+  g_object_set_data(G_OBJECT(button), "action-id",
+                    GUINT_TO_POINTER((guint)action_id + 1));
+  g_signal_connect(button, "clicked", G_CALLBACK(button_clicked), NULL);
+  gtk_grid_attach(GTK_GRID(grid), button, (gint)action_id % 4,
+                  (gint)action_id / 4, 1, 1);
 }
 
-static void on_confirmation_response(GtkDialog *dialog, gint response_id, gpointer user_data) {
-    if (response_id == GTK_RESPONSE_YES) {
-        const gchar *command = g_object_get_data(G_OBJECT(dialog), "command");
-        GtkWindow *parent = GTK_WINDOW(gtk_window_get_transient_for(GTK_WINDOW(dialog)));
-        execute_command(command, parent);
-    }
-    gtk_window_destroy(GTK_WINDOW(dialog));
-}
+static void activate(GtkApplication *app, gpointer user_data G_GNUC_UNUSED) {
+  GtkWindow *existing_window = gtk_application_get_active_window(app);
 
-static void create_button(GtkWidget *grid, GtkApplication *app, const gchar *label_text,
-                          const gchar *icon_name, const gchar *command, int pos) {
-    GtkWidget *button;
-    GtkWidget *box;
-    GtkWidget *image;
-    GtkWidget *label;
+  if (existing_window != NULL) {
+    gtk_window_present(existing_window);
+    return;
+  }
 
-    button = gtk_button_new();
-    gtk_widget_set_hexpand(button, TRUE); // Allow button to expand horizontally
-    gtk_widget_set_vexpand(button, TRUE); // Allow button to expand vertically
+  GtkWidget *window = gtk_application_window_new(app);
+  GtkWidget *grid = gtk_grid_new();
 
-    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0); // Set spacing to 0 for tighter layout
-    gtk_widget_set_valign(box, GTK_ALIGN_CENTER);   // Center the content vertically
-    gtk_widget_set_halign(box, GTK_ALIGN_CENTER);   // Center the content horizontally
-    gtk_button_set_child(GTK_BUTTON(button), box);
+  gtk_window_set_title(GTK_WINDOW(window), "Simple ShutDown Dialog");
+  gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
+  gtk_grid_set_row_spacing(GTK_GRID(grid), 5);
+  gtk_grid_set_column_spacing(GTK_GRID(grid), 5);
+  gtk_widget_set_margin_top(grid, 15);
+  gtk_widget_set_margin_bottom(grid, 15);
+  gtk_widget_set_margin_start(grid, 15);
+  gtk_widget_set_margin_end(grid, 15);
+  gtk_window_set_child(GTK_WINDOW(window), grid);
 
-    image = gtk_image_new_from_icon_name(icon_name);
-    gtk_box_append(GTK_BOX(box), image);
+  for (guint i = 0; i < N_ACTIONS; i++)
+    create_button(grid, (ActionId)i);
 
-    label = gtk_label_new(label_text);
-    gtk_box_append(GTK_BOX(box), label);
-
-    // Reduce margins around the button content
-    gtk_widget_set_margin_top(box, 5);
-    gtk_widget_set_margin_bottom(box, 5);
-    gtk_widget_set_margin_start(box, 5);
-    gtk_widget_set_margin_end(box, 5);
-
-    g_object_set_data(G_OBJECT(button), "app", app);
-    g_object_set_data(G_OBJECT(button), "label", (gpointer)label_text);
-    g_signal_connect(button, "clicked", G_CALLBACK(button_clicked), (gpointer)command);
-
-    gtk_grid_attach(GTK_GRID(grid), button, pos % 4, pos / 4, 1, 1);
-}
-
-static void save_configuration(const gchar *commands[]) {
-    GError *error = NULL;
-    gchar *config_dir = get_config_dir();
-    gchar *config_path = get_config_path();
-
-    g_mkdir_with_parents(config_dir, 0755);
-
-    GString *config_data = g_string_new(NULL);
-    g_string_append_printf(config_data, "LOGOUT_COMMAND=%s\n", commands[0]);
-    g_string_append_printf(config_data, "REBOOT_COMMAND=%s\n", commands[1]);
-    g_string_append_printf(config_data, "SHUTDOWN_COMMAND=%s\n", commands[2]);
-    g_string_append_printf(config_data, "SWITCH_USER_COMMAND=%s\n", commands[3]);
-    g_string_append_printf(config_data, "SUSPEND_COMMAND=%s\n", commands[4]);
-    g_string_append_printf(config_data, "HIBERNATE_COMMAND=%s\n", commands[5]);
-
-    g_file_set_contents(config_path, config_data->str, -1, &error);
-
-    if (error) {
-        g_warning("Failed to save configuration: %s", error->message);
-        g_error_free(error);
-    }
-
-    g_string_free(config_data, TRUE);
-    g_free(config_dir);
-    g_free(config_path);
-}
-
-static void load_configuration(gchar *commands[]) {
-    GError *error = NULL;
-    gchar *config_data = NULL;
-    gchar *config_dir = get_config_dir();
-    gchar *config_path = get_config_path();
-
-    // Initialize all commands to NULL before anything else
-    for (int i = 0; i < NUM_COMMANDS; i++) {
-        commands[i] = NULL;
-    }
-
-    g_mkdir_with_parents(config_dir, 0755);
-
-    if (!g_file_test(config_path, G_FILE_TEST_EXISTS)) {
-        g_warning("Configuration file not found. Generating a default configuration.");
-        save_configuration(DEFAULT_COMMANDS);
-    }
-
-    if (!g_file_get_contents(config_path, &config_data, NULL, &error)) {
-        g_warning("Failed to load configuration: %s", error->message);
-        g_error_free(error);
-        // Fall back to defaults after read failure
-        for (int i = 0; i < NUM_COMMANDS; i++) {
-            commands[i] = g_strdup(DEFAULT_COMMANDS[i]);
-        }
-        g_free(config_dir);
-        g_free(config_path);
-        return;
-    }
-
-    gchar **lines = g_strsplit(config_data, "\n", -1);
-    for (int i = 0; lines[i] != NULL; i++) {
-        if (g_strcmp0(lines[i], "") == 0) {
-            continue;
-        }
-
-        gchar **key_value = g_strsplit(lines[i], "=", 2);
-
-        if (!key_value[0] || !key_value[1]) {
-            g_warning("Invalid entry in configuration file at line %d.", i + 1);
-            g_strfreev(key_value);
-            continue;
-        }
-
-        if (g_strcmp0(key_value[0], "LOGOUT_COMMAND") == 0) {
-            commands[0] = g_strdup(key_value[1]);
-        } else if (g_strcmp0(key_value[0], "REBOOT_COMMAND") == 0) {
-            commands[1] = g_strdup(key_value[1]);
-        } else if (g_strcmp0(key_value[0], "SHUTDOWN_COMMAND") == 0) {
-            commands[2] = g_strdup(key_value[1]);
-        } else if (g_strcmp0(key_value[0], "SWITCH_USER_COMMAND") == 0) {
-            commands[3] = g_strdup(key_value[1]);
-        } else if (g_strcmp0(key_value[0], "SUSPEND_COMMAND") == 0) {
-            commands[4] = g_strdup(key_value[1]);
-        } else if (g_strcmp0(key_value[0], "HIBERNATE_COMMAND") == 0) {
-            commands[5] = g_strdup(key_value[1]);
-        } else {
-            g_warning("Unknown key in configuration: %s", key_value[0]);
-        }
-
-        g_strfreev(key_value);
-    }
-
-    // Fill any remaining NULL entries with defaults
-    for (int i = 0; i < NUM_COMMANDS; i++) {
-        if (commands[i] == NULL || g_strcmp0(commands[i], "") == 0) {
-            g_free(commands[i]);
-            commands[i] = g_strdup(DEFAULT_COMMANDS[i]);
-        }
-    }
-
-    g_strfreev(lines);
-    g_free(config_data);
-    g_free(config_dir);
-    g_free(config_path);
-}
-
-static void activate(GtkApplication *app, gpointer user_data) {
-    GtkWidget *window;
-    GtkWidget *grid;
-    gchar *commands[NUM_COMMANDS];
-    load_configuration(commands);
-
-    const gchar *icons[] = {
-        "system-log-out",
-        "view-refresh",
-        "system-shutdown",
-        "system-users",
-        "media-playback-pause",
-        "media-playback-stop",
-        "preferences-system",
-        "application-exit"
-    };
-    const gchar *labels[] = {
-        "Logout",
-        "Reboot",
-        "Shutdown",
-        "Switch User",
-        "Suspend",
-        "Hibernate",
-        "Settings",
-        "Exit"
-    };
-
-    window = gtk_application_window_new(app);
-    gtk_window_set_title(GTK_WINDOW(window), "Simple ShutDown Dialog");
-    gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
-
-    grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 2);    // Reduce vertical spacing between grid rows
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 2); // Reduce horizontal spacing between grid columns
-    gtk_widget_set_margin_top(grid, 10);
-    gtk_widget_set_margin_bottom(grid, 10);
-    gtk_widget_set_margin_start(grid, 10);
-    gtk_widget_set_margin_end(grid, 10);
-    gtk_window_set_child(GTK_WINDOW(window), grid);
-
-    for (int i = 0; i < NUM_COMMANDS; i++) {
-        create_button(grid, app, labels[i], icons[i], commands[i], i);
-        g_free(commands[i]);
-    }
-    create_button(grid, app, labels[6], icons[6], "settings", 6);
-    create_button(grid, app, labels[7], icons[7], "exit", 7);
-
-    // Key event handling
-    GtkEventController *key_controller = gtk_event_controller_key_new();
-    gtk_widget_add_controller(window, key_controller);
-    g_signal_connect(key_controller, "key-pressed", G_CALLBACK(on_key_pressed), app);
-
-    gtk_window_present(GTK_WINDOW(window));
+  GtkEventController *key_controller = gtk_event_controller_key_new();
+  gtk_widget_add_controller(window, key_controller);
+  g_signal_connect(key_controller, "key-pressed", G_CALLBACK(on_key_pressed),
+                   app);
+  gtk_window_present(GTK_WINDOW(window));
 }
 
 int main(int argc, char **argv) {
-    GtkApplication *app;
-    int status;
+  g_autoptr(GtkApplication) app =
+      gtk_application_new("com.kekepower.ssdd", G_APPLICATION_DEFAULT_FLAGS);
+  AppState *state = g_new0(AppState, 1);
 
-    g_resources_register(resources_get_resource());
+  load_configuration(state);
+  g_object_set_data_full(G_OBJECT(app), "app-state", state, app_state_free);
+  g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
 
-    app = gtk_application_new("org.gtk.ssdd", G_APPLICATION_DEFAULT_FLAGS);
-    g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
-    status = g_application_run(G_APPLICATION(app), argc, argv);
-    g_object_unref(app);
-
-    return status;
+  return g_application_run(G_APPLICATION(app), argc, argv);
 }

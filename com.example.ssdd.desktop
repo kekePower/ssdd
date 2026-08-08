@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Simple Shutdown Dialog
+Exec=ssdd
+Icon=com.example.ssdd
+Categories=Utility;
+

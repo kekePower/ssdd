@@ -2,6 +2,9 @@ ssdd
 resources.c
 resources.h
 
+# Atlas Scout local data
+.atlas/
+
 # ZaguanBlade local data
 .zblade/
 .pnpm-store/
