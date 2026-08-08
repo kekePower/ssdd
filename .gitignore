@@ -1,3 +1,6 @@
 ssdd
 resources.c
 resources.h
+
+# Atlas Scout local data
+.atlas/

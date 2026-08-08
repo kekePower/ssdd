@@ -2,11 +2,13 @@
 CC = gcc
 
 # Compiler and optimization flags
-CFLAGS ?= -Wall -O2
-CFLAGS += $(shell pkg-config --cflags gtk4)
-CFLAGS += -DGDK_VERSION_MAX_ALLOWED=GDK_VERSION_4_0 -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_4_0
-LDFLAGS ?=
-LDFLAGS += $(shell pkg-config --libs gtk4)
+CFLAGS ?= -O2 -Wall -Wextra
+GTK_CFLAGS := $(shell pkg-config --cflags gtk4)
+GTK_LIBS := $(shell pkg-config --libs gtk4)
+VERSION_FLAGS = -DGTK_VERSION_MAX_ALLOWED=GTK_VERSION_4_0 \
+	-DGTK_VERSION_MIN_REQUIRED=GTK_VERSION_4_0 \
+	-DGDK_VERSION_MAX_ALLOWED=GDK_VERSION_4_0 \
+	-DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_4_0
 
 # Source files
 SRC = ssdd.c resources.c
@@ -17,7 +19,7 @@ TARGET = ssdd
 # Resource files
 RESOURCE_XML = resources.gresource.xml
 RESOURCE_C = resources.c
-RESOURCE_H = resources.h
+RESOURCE_FILES = ssdd-icon.png
 
 # Installation directories
 PREFIX ?= /usr/local
@@ -28,13 +30,13 @@ DATADIR = $(PREFIX)/share/ssdd
 all: $(TARGET)
 
 # Build the target
-$(TARGET): $(RESOURCE_C) $(SRC)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
+$(TARGET): $(SRC)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(GTK_CFLAGS) $(VERSION_FLAGS) \
+		-o $(TARGET) $(SRC) $(LDFLAGS) $(GTK_LIBS)
 
 # Compile resources
-$(RESOURCE_C) $(RESOURCE_H): $(RESOURCE_XML)
+$(RESOURCE_C): $(RESOURCE_XML) $(RESOURCE_FILES)
 	glib-compile-resources $(RESOURCE_XML) --generate-source --target=$(RESOURCE_C)
-	glib-compile-resources $(RESOURCE_XML) --generate-header --target=$(RESOURCE_H)
 
 # Install target
 install: $(TARGET)
@@ -50,6 +52,6 @@ uninstall:
 
 # Clean target
 clean:
-	rm -f $(TARGET) $(RESOURCE_C) $(RESOURCE_H)
+	rm -f $(TARGET) $(RESOURCE_C)
 
 .PHONY: all clean install uninstall
